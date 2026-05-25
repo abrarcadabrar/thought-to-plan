@@ -4,49 +4,125 @@ import { useEffect, useState } from "react";
 import { User } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 
-type Plan = {
-  summary: string;
-  goals: string;
-  blockers: string;
-  nextActions: string;
-  hardTruth: string;
+type Advisor = {
+  title: string;
+  perspective: string;
+  whatYouMayBeMissing: string;
+  advice: string;
+  question: string;
 };
 
-type SavedPlan = {
+type BoardResponse = {
+  advisors: {
+    financial: Advisor;
+    career: Advisor;
+    family: Advisor;
+    healthFitness: Advisor;
+    romantic: Advisor;
+    community: Advisor;
+    personalGrowth: Advisor;
+  };
+  chair: {
+    title: string;
+    integratedRecommendation: string;
+    tradeoffs: string;
+    nextThreeActions: string;
+    groundingReminder: string;
+  };
+};
+
+type SavedDecision = {
   id: string;
-  thoughts: string;
-  summary: string;
-  goals: string;
-  blockers: string;
-  next_actions: string;
-  hard_truth: string;
+  situation: string;
+  decision_type: string;
+  urgency: string;
+  emotional_state: string;
+  advisors: BoardResponse["advisors"];
+  chair: BoardResponse["chair"];
   created_at: string;
 };
 
-const emptyPlan: Plan = {
-  summary: "Your summary will appear here.",
-  goals: "Your goals will appear here.",
-  blockers: "Your blockers will appear here.",
-  nextActions: "Your next actions will appear here.",
-  hardTruth: "Your hard truth will appear here.",
+const emptyBoard: BoardResponse = {
+  advisors: {
+    financial: {
+      title: "Financial Advisor",
+      perspective: "Your financial perspective will appear here.",
+      whatYouMayBeMissing: "What you may be missing will appear here.",
+      advice: "Advice will appear here.",
+      question: "A question will appear here.",
+    },
+    career: {
+      title: "Career Strategist",
+      perspective: "Your career perspective will appear here.",
+      whatYouMayBeMissing: "What you may be missing will appear here.",
+      advice: "Advice will appear here.",
+      question: "A question will appear here.",
+    },
+    family: {
+      title: "Family Advisor",
+      perspective: "Your family perspective will appear here.",
+      whatYouMayBeMissing: "What you may be missing will appear here.",
+      advice: "Advice will appear here.",
+      question: "A question will appear here.",
+    },
+    healthFitness: {
+      title: "Health & Fitness Coach",
+      perspective: "Your health perspective will appear here.",
+      whatYouMayBeMissing: "What you may be missing will appear here.",
+      advice: "Advice will appear here.",
+      question: "A question will appear here.",
+    },
+    romantic: {
+      title: "Romantic Life Advisor",
+      perspective: "Your romantic life perspective will appear here.",
+      whatYouMayBeMissing: "What you may be missing will appear here.",
+      advice: "Advice will appear here.",
+      question: "A question will appear here.",
+    },
+    community: {
+      title: "Community Advisor",
+      perspective: "Your community perspective will appear here.",
+      whatYouMayBeMissing: "What you may be missing will appear here.",
+      advice: "Advice will appear here.",
+      question: "A question will appear here.",
+    },
+    personalGrowth: {
+      title: "Personal Growth Guide",
+      perspective: "Your personal growth perspective will appear here.",
+      whatYouMayBeMissing: "What you may be missing will appear here.",
+      advice: "Advice will appear here.",
+      question: "A question will appear here.",
+    },
+  },
+  chair: {
+    title: "Board Chair",
+    integratedRecommendation: "Your integrated recommendation will appear here.",
+    tradeoffs: "Your tradeoffs will appear here.",
+    nextThreeActions: "Your next three actions will appear here.",
+    groundingReminder: "Your grounding reminder will appear here.",
+  },
 };
 
-const sampleThought =
-  "I want to build an AI startup but I keep jumping between wellness, consulting automation, and sports training. I feel like I need a technical cofounder, but I also want to learn to build myself. I don't know where to focus.";
+const sampleSituation =
+  "I am trying to decide whether to spend the next few months going hard on learning AI coding and building startup prototypes, while also preparing to start my post-MBA job. Part of me wants freedom and creativity, but another part worries I will overextend myself.";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const [thoughts, setThoughts] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [authLoading, setAuthLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [situation, setSituation] = useState("");
+  const [decisionType, setDecisionType] = useState("General life decision");
+  const [urgency, setUrgency] = useState("Medium");
+  const [emotionalState, setEmotionalState] = useState("Confused");
 
-  const [plan, setPlan] = useState<Plan>(emptyPlan);
+  const [board, setBoard] = useState<BoardResponse>(emptyBoard);
+  const [savedDecisions, setSavedDecisions] = useState<SavedDecision[]>([]);
+
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
   const [error, setError] = useState("");
-  const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -56,7 +132,7 @@ export default function Home() {
       setUser(currentUser);
 
       if (currentUser) {
-        loadSavedPlans();
+        loadSavedDecisions();
       }
     }
 
@@ -68,9 +144,9 @@ export default function Home() {
         setUser(currentUser);
 
         if (currentUser) {
-          loadSavedPlans();
+          loadSavedDecisions();
         } else {
-          setSavedPlans([]);
+          setSavedDecisions([]);
         }
       }
     );
@@ -117,25 +193,25 @@ export default function Home() {
   async function logOut() {
     await supabase.auth.signOut();
     setUser(null);
-    setSavedPlans([]);
+    setSavedDecisions([]);
   }
 
-  async function loadSavedPlans() {
+  async function loadSavedDecisions() {
     const { data, error } = await supabase
-      .from("plans")
+      .from("life_board_decisions")
       .select("*")
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Load saved plans error:", error);
+      console.error("Load saved decisions error:", error);
       setError(error.message);
       return;
     }
 
-    setSavedPlans(data ?? []);
+    setSavedDecisions(data ?? []);
   }
 
-  async function savePlanToDatabase(inputThoughts: string, generatedPlan: Plan) {
+  async function saveDecisionToDatabase(generatedBoard: BoardResponse) {
     setSaving(true);
 
     try {
@@ -145,31 +221,31 @@ export default function Home() {
 
       if (!user) return;
 
-      const { error } = await supabase.from("plans").insert({
+      const { error } = await supabase.from("life_board_decisions").insert({
         user_id: user.id,
-        thoughts: inputThoughts,
-        summary: generatedPlan.summary,
-        goals: generatedPlan.goals,
-        blockers: generatedPlan.blockers,
-        next_actions: generatedPlan.nextActions,
-        hard_truth: generatedPlan.hardTruth,
+        situation,
+        decision_type: decisionType,
+        urgency,
+        emotional_state: emotionalState,
+        advisors: generatedBoard.advisors,
+        chair: generatedBoard.chair,
       });
 
       if (error) {
-        console.error("Save plan error:", error);
+        console.error("Save decision error:", error);
         setError(error.message);
         return;
       }
 
-      await loadSavedPlans();
+      await loadSavedDecisions();
     } finally {
       setSaving(false);
     }
   }
 
-  async function generatePlan() {
-    if (!thoughts.trim()) {
-      setError("Please enter your thoughts first.");
+  async function generateBoardAdvice() {
+    if (!situation.trim()) {
+      setError("Please enter the situation or decision first.");
       return;
     }
 
@@ -178,126 +254,176 @@ export default function Home() {
     setCopied(false);
 
     try {
-      const response = await fetch("/api/generate-plan", {
+      const response = await fetch("/api/generate-board", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ thoughts }),
+        body: JSON.stringify({
+          situation,
+          decisionType,
+          urgency,
+          emotionalState,
+        }),
       });
 
       const text = await response.text();
-      const data: Plan = JSON.parse(text);
+      const data: BoardResponse = JSON.parse(text);
 
       if (!response.ok) {
         throw new Error("Something went wrong.");
       }
 
-      setPlan(data);
+      setBoard(data);
       setLoading(false);
 
       if (user) {
-        savePlanToDatabase(thoughts, data);
+        saveDecisionToDatabase(data);
       }
     } catch (error) {
-      console.error("Generate plan error:", error);
-      setError("Something went wrong generating your plan.");
+      console.error("Generate board advice error:", error);
+      setError("Something went wrong generating board advice.");
       setLoading(false);
     }
   }
 
-  function loadSavedPlan(item: SavedPlan) {
-    setThoughts(item.thoughts);
-    setPlan({
-      summary: item.summary,
-      goals: item.goals,
-      blockers: item.blockers,
-      nextActions: item.next_actions,
-      hardTruth: item.hard_truth,
+  function loadSavedDecision(item: SavedDecision) {
+    setSituation(item.situation);
+    setDecisionType(item.decision_type);
+    setUrgency(item.urgency);
+    setEmotionalState(item.emotional_state);
+    setBoard({
+      advisors: item.advisors,
+      chair: item.chair,
     });
     setError("");
     setCopied(false);
   }
 
-  async function deleteSavedPlan(id: string) {
-    const { error } = await supabase.from("plans").delete().eq("id", id);
+  async function deleteSavedDecision(id: string) {
+    const { error } = await supabase
+      .from("life_board_decisions")
+      .delete()
+      .eq("id", id);
 
     if (error) {
       setError(error.message);
       return;
     }
 
-    await loadSavedPlans();
-  }
-
-  function clearAll() {
-    setThoughts("");
-    setPlan(emptyPlan);
-    setError("");
-    setCopied(false);
+    await loadSavedDecisions();
   }
 
   function useSample() {
-    setThoughts(sampleThought);
+    setSituation(sampleSituation);
+    setDecisionType("Career");
+    setUrgency("Medium");
+    setEmotionalState("Confused");
     setError("");
     setCopied(false);
   }
 
-  function formatPlanForCopy() {
-    return `Thought-to-Plan
-
-Original Thoughts:
-${thoughts}
-
-Summary:
-${plan.summary}
-
-Goals:
-${plan.goals}
-
-Blockers:
-${plan.blockers}
-
-Next Actions:
-${plan.nextActions}
-
-Hard Truth:
-${plan.hardTruth}`;
+  function clearAll() {
+    setSituation("");
+    setDecisionType("General life decision");
+    setUrgency("Medium");
+    setEmotionalState("Confused");
+    setBoard(emptyBoard);
+    setError("");
+    setCopied(false);
   }
 
-  async function copyPlan() {
-    await navigator.clipboard.writeText(formatPlanForCopy());
+  function formatBoardForCopy() {
+    const advisors = Object.values(board.advisors)
+      .map(
+        (advisor) => `${advisor.title}
+
+Perspective:
+${advisor.perspective}
+
+What you may be missing:
+${advisor.whatYouMayBeMissing}
+
+Advice:
+${advisor.advice}
+
+Question:
+${advisor.question}`
+      )
+      .join("\n\n---\n\n");
+
+    return `Life Board
+
+Situation:
+${situation}
+
+Decision type: ${decisionType}
+Urgency: ${urgency}
+Emotional state: ${emotionalState}
+
+${advisors}
+
+---
+
+${board.chair.title}
+
+Integrated recommendation:
+${board.chair.integratedRecommendation}
+
+Tradeoffs:
+${board.chair.tradeoffs}
+
+Next three actions:
+${board.chair.nextThreeActions}
+
+Grounding reminder:
+${board.chair.groundingReminder}`;
+  }
+
+  async function copyBoard() {
+    await navigator.clipboard.writeText(formatBoardForCopy());
     setCopied(true);
   }
 
-  function downloadPlan() {
-    const text = formatPlanForCopy();
+  function downloadBoard() {
+    const text = formatBoardForCopy();
     const blob = new Blob([text], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement("a");
     link.href = url;
-    link.download = "thought-to-plan.txt";
+    link.download = "life-board-advice.txt";
     link.click();
 
     URL.revokeObjectURL(url);
   }
 
-  const hasGeneratedPlan = plan.summary !== emptyPlan.summary;
+  const hasGeneratedBoard =
+    board.chair.integratedRecommendation !==
+    emptyBoard.chair.integratedRecommendation;
+
+  const advisorList = [
+    board.advisors.financial,
+    board.advisors.career,
+    board.advisors.family,
+    board.advisors.healthFitness,
+    board.advisors.romantic,
+    board.advisors.community,
+    board.advisors.personalGrowth,
+  ];
 
   return (
     <main className="min-h-screen bg-gray-50 px-6 py-12">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         <p className="text-sm font-medium uppercase tracking-wide text-gray-500">
           AI Builder Sprint
         </p>
 
-        <h1 className="mt-2 text-4xl font-bold text-gray-900">
-          Thought-to-Plan
-        </h1>
+        <h1 className="mt-2 text-4xl font-bold text-gray-900">Life Board</h1>
 
-        <p className="mt-3 text-lg text-gray-600">
-          Paste messy thoughts and turn them into a clear, structured action plan.
+        <p className="mt-3 max-w-3xl text-lg text-gray-600">
+          Bring a decision to your personal board of directors. Get perspective
+          across money, career, family, health, romance, community, and personal growth.
         </p>
 
         <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -310,7 +436,7 @@ ${plan.hardTruth}`;
 
                 {saving && (
                   <p className="mt-1 text-sm text-gray-400">
-                    Saving plan to database...
+                    Saving decision to database...
                   </p>
                 )}
               </div>
@@ -325,7 +451,7 @@ ${plan.hardTruth}`;
           ) : (
             <div>
               <h2 className="text-xl font-semibold text-gray-900">
-                Log in to save your plans
+                Log in to save your board sessions
               </h2>
 
               <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
@@ -374,30 +500,65 @@ ${plan.hardTruth}`;
         <div className="mt-8 grid gap-6 lg:grid-cols-[2fr_1fr]">
           <div>
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <label className="block text-sm font-medium text-gray-700">
-                  Your thoughts
-                </label>
-
-                <p className="text-sm text-gray-400">
-                  {thoughts.length} characters
-                </p>
-              </div>
+              <label className="block text-sm font-medium text-gray-700">
+                What decision or situation are you thinking through?
+              </label>
 
               <textarea
-                value={thoughts}
-                onChange={(event) => setThoughts(event.target.value)}
-                className="mt-2 h-48 w-full rounded-xl border border-gray-300 p-4 text-gray-900 shadow-sm focus:border-black focus:outline-none"
-                placeholder="Example: I want to build a startup, but I feel overwhelmed and don't know what to focus on..."
+                value={situation}
+                onChange={(event) => setSituation(event.target.value)}
+                className="mt-2 h-44 w-full rounded-xl border border-gray-300 p-4 text-gray-900 shadow-sm focus:border-black focus:outline-none"
+                placeholder="Example: I am deciding whether to focus on building a startup idea this summer or prioritize career stability..."
               />
+
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <select
+                  value={decisionType}
+                  onChange={(event) => setDecisionType(event.target.value)}
+                  className="rounded-xl border border-gray-300 p-3 text-gray-900"
+                >
+                  <option>General life decision</option>
+                  <option>Career</option>
+                  <option>Financial</option>
+                  <option>Family</option>
+                  <option>Health & Fitness</option>
+                  <option>Romantic</option>
+                  <option>Community</option>
+                  <option>Personal Growth</option>
+                </select>
+
+                <select
+                  value={urgency}
+                  onChange={(event) => setUrgency(event.target.value)}
+                  className="rounded-xl border border-gray-300 p-3 text-gray-900"
+                >
+                  <option>Low</option>
+                  <option>Medium</option>
+                  <option>High</option>
+                </select>
+
+                <select
+                  value={emotionalState}
+                  onChange={(event) => setEmotionalState(event.target.value)}
+                  className="rounded-xl border border-gray-300 p-3 text-gray-900"
+                >
+                  <option>Calm</option>
+                  <option>Confused</option>
+                  <option>Stressed</option>
+                  <option>Excited</option>
+                  <option>Sad</option>
+                  <option>Angry</option>
+                  <option>Hopeful</option>
+                </select>
+              </div>
 
               <div className="mt-4 flex flex-wrap gap-3">
                 <button
-                  onClick={generatePlan}
+                  onClick={generateBoardAdvice}
                   disabled={loading}
                   className="rounded-xl bg-black px-5 py-3 font-medium text-white hover:bg-gray-800 disabled:bg-gray-400"
                 >
-                  {loading ? "Generating..." : "Generate Plan"}
+                  {loading ? "Board is thinking..." : "Ask My Board"}
                 </button>
 
                 <button
@@ -421,21 +582,21 @@ ${plan.hardTruth}`;
             <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-2xl font-semibold text-gray-900">
-                  Your Plan
+                  Board Chair Recommendation
                 </h2>
 
                 <div className="flex gap-3">
                   <button
-                    onClick={copyPlan}
-                    disabled={!hasGeneratedPlan}
+                    onClick={copyBoard}
+                    disabled={!hasGeneratedBoard}
                     className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:text-gray-400"
                   >
                     {copied ? "Copied" : "Copy"}
                   </button>
 
                   <button
-                    onClick={downloadPlan}
-                    disabled={!hasGeneratedPlan}
+                    onClick={downloadBoard}
+                    disabled={!hasGeneratedBoard}
                     className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:text-gray-400"
                   >
                     Download
@@ -443,48 +604,65 @@ ${plan.hardTruth}`;
                 </div>
               </div>
 
-              <div className="mt-6 space-y-5">
-                <PlanSection title="Summary" content={plan.summary} />
-                <PlanSection title="Goals" content={plan.goals} />
-                <PlanSection title="Blockers" content={plan.blockers} />
-                <PlanSection title="Next Actions" content={plan.nextActions} />
-                <PlanSection title="Hard Truth" content={plan.hardTruth} />
+              <div className="mt-6 grid gap-4">
+                <ChairSection
+                  title="Integrated Recommendation"
+                  content={board.chair.integratedRecommendation}
+                />
+                <ChairSection title="Tradeoffs" content={board.chair.tradeoffs} />
+                <ChairSection
+                  title="Next Three Actions"
+                  content={board.chair.nextThreeActions}
+                />
+                <ChairSection
+                  title="Grounding Reminder"
+                  content={board.chair.groundingReminder}
+                />
               </div>
+            </section>
+
+            <section className="mt-6 grid gap-4 md:grid-cols-2">
+              {advisorList.map((advisor) => (
+                <AdvisorCard key={advisor.title} advisor={advisor} />
+              ))}
             </section>
           </div>
 
           <aside className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-900">Saved Plans</h2>
+            <h2 className="text-xl font-semibold text-gray-900">
+              Saved Decisions
+            </h2>
 
             {!user ? (
               <p className="mt-4 text-sm text-gray-500">
-                Log in to save and view plans across devices.
+                Log in to save and view board sessions across devices.
               </p>
-            ) : savedPlans.length === 0 ? (
+            ) : savedDecisions.length === 0 ? (
               <p className="mt-4 text-sm text-gray-500">
-                Your saved plans will appear here.
+                Your saved board sessions will appear here.
               </p>
             ) : (
               <div className="mt-4 space-y-3">
-                {savedPlans.map((item) => (
+                {savedDecisions.map((item) => (
                   <div
                     key={item.id}
                     className="rounded-xl border border-gray-200 p-3 hover:bg-gray-50"
                   >
                     <button
-                      onClick={() => loadSavedPlan(item)}
+                      onClick={() => loadSavedDecision(item)}
                       className="w-full text-left"
                     >
                       <p className="line-clamp-2 text-sm font-medium text-gray-900">
-                        {item.thoughts}
+                        {item.situation}
                       </p>
                       <p className="mt-1 text-xs text-gray-500">
+                        {item.decision_type} ·{" "}
                         {new Date(item.created_at).toLocaleString()}
                       </p>
                     </button>
 
                     <button
-                      onClick={() => deleteSavedPlan(item.id)}
+                      onClick={() => deleteSavedDecision(item.id)}
                       className="mt-2 text-xs font-medium text-gray-400 hover:text-red-600"
                     >
                       Delete
@@ -500,11 +678,38 @@ ${plan.hardTruth}`;
   );
 }
 
-function PlanSection({ title, content }: { title: string; content: string }) {
+function AdvisorCard({ advisor }: { advisor: Advisor }) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <h3 className="text-lg font-semibold text-gray-900">{advisor.title}</h3>
+
+      <div className="mt-4 space-y-3">
+        <MiniSection title="Perspective" content={advisor.perspective} />
+        <MiniSection
+          title="What you may be missing"
+          content={advisor.whatYouMayBeMissing}
+        />
+        <MiniSection title="Advice" content={advisor.advice} />
+        <MiniSection title="Question" content={advisor.question} />
+      </div>
+    </div>
+  );
+}
+
+function ChairSection({ title, content }: { title: string; content: string }) {
+  return (
+    <div className="rounded-xl bg-gray-50 p-4">
+      <h3 className="font-semibold text-gray-900">{title}</h3>
+      <p className="mt-1 whitespace-pre-line text-gray-700">{content}</p>
+    </div>
+  );
+}
+
+function MiniSection({ title, content }: { title: string; content: string }) {
   return (
     <div>
-      <h3 className="font-semibold text-gray-900">{title}</h3>
-      <p className="mt-1 whitespace-pre-line text-gray-600">{content}</p>
+      <p className="text-sm font-semibold text-gray-900">{title}</p>
+      <p className="mt-1 whitespace-pre-line text-sm text-gray-600">{content}</p>
     </div>
   );
 }
